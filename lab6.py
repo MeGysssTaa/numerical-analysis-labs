@@ -5,8 +5,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
+# Общая функция для решения указанной задачи заданным методом и вывода результата.
 def solve(
-    title: str,
+    title: str,  # заголовок с описанием случая для вывода
     I: int,
     x_start: float,
     x_end: float,
@@ -14,11 +15,11 @@ def solve(
     t_start: float,
     t_end: float,
     a: float,
-    r: float,
     fun_f: Callable[[float, float], float],
-    fun_u_x_0: Callable[[float], float],
-    fun_u_0_x: Optional[Callable[[float], float]],
-    scheme: Callable,
+    fun_u_x_0: Callable[[float], float],  # u(x,0) (нужно во всех случаях)
+    fun_u_0_x: Optional[Callable[[float], float]],  # u(0,x) (нужно для прямоугольной области при a > 0)
+    fun_u_1_x: Optional[Callable[[float], float]],  # u(1,x) (нужно для прямоугольной области при a < 0)
+    scheme: Callable,  # схема решения -- одна из функций: scheme_1_halfplane_a_pos, ...
 ):
     # Подготовка (дано)
     lam = a * r / h
@@ -26,17 +27,17 @@ def solve(
     t: list[float] = [t_start + j * r for j in range(J)]
     u: list[list[Optional[float]]] = [[None for _ in range(J)] for _ in range(I)]
 
-    for i in range(I):  # u(x,0) - нужно как для полуплоскости, так и для прямоугольной области
+    for i in range(I):
         u[i][0] = fun_u_x_0(x[i])
 
-    if fun_u_0_x is not None:  # u(0,x) - нужно только для прямоугольной области
-        for j in range(J):
+    for j in range(J):
+        if fun_u_0_x is not None:
             u[0][j] = fun_u_0_x(t[j])
-
-    f: list[list[float]] = [[fun_f(x[i], t[j]) for j in range(J)] for i in range(I)]  # правая часть
+        if fun_u_1_x is not None:
+            u[-1][j] = fun_u_1_x(t[j])
 
     # Решение (применение схемы)
-    scheme(u, I, J, h, r, lam, f)
+    scheme(u, a, I, x, J, t, lam, fun_f)
 
     # Вывод ответа (таблица, график)
     i_plot_start = None
@@ -67,25 +68,76 @@ def solve(
     plt.show()
 
 
-# Схема 1 для полуплоскости
-def scheme_1_halfplane(u, I, J, h, r, lam, f):
+# Схема 1 для полуплоскости. a > 0
+# noinspection PyUnusedLocal
+def scheme_1_halfplane_a_pos(u, a, I, x, J, t, lam, fun_f):
     for j in range(J - 1):
         for i in range(j + 1, I):
-            u[i][j + 1] = lam * u[i - 1][j] + (1 - lam) * u[i][j] + r * f[i][j]
+            u[i][j + 1] = lam * u[i - 1][j] + (1 - lam) * u[i][j] + r * fun_f(x[i], t[j])
 
 
-# Схема 1 для прямоугольной области
-def scheme_1_rect(u, I, J, h, r, lam, f):
+# Схема 1 для прямоугольной области. a > 0
+# noinspection PyUnusedLocal
+def scheme_1_rect_a_pos(u, a, I, x, J, t, lam, fun_f):
     for j in range(J - 1):
-        for i in range(1, I):
-            u[i][j + 1] = lam * u[i - 1][j] + (1 - lam) * u[i][j] + r * f[i][j]
+        for i in range(0 + 1, I):
+            u[i][j + 1] = lam * u[i - 1][j] + (1 - lam) * u[i][j] + r * fun_f(x[i], t[j])
+
+
+# Схема 2 для полуплоскости. a < 0
+# noinspection PyUnusedLocal
+def scheme_2_halfplane_a_neg(u, a, I, x, J, t, lam, fun_f):
+    for j in range(J - 1):
+        for i in range(I - j - 1):
+            u[i][j + 1] = -lam * u[i + 1][j] + (1 + lam) * u[i][j] + r * fun_f(x[i], t[j])
+
+
+# Схема 2 для прямоугольной области. a < 0
+# noinspection PyUnusedLocal
+def scheme_2_rect_a_neg(u, a, I, x, J, t, lam, fun_f):
+    for j in range(J - 1):
+        for i in range(I - 0 - 1):
+            u[i][j + 1] = -lam * u[i + 1][j] + (1 + lam) * u[i][j] + r * fun_f(x[i], t[j])
+
+
+# Схема 3 для прямоугольной области. a > 0
+# noinspection PyUnusedLocal
+def scheme_3_rect_a_pos(u, a, I, x, J, t, lam, fun_f):
+    for j in range(J - 1):
+        for i in range(0 + 1, I):
+            u[i][j + 1] = (u[i][j] + lam * u[i - 1][j + 1] + r * fun_f(x[i], t[j])) / (1 + lam)
+
+
+# Схема 4 для прямоугольной области. a > 0
+# noinspection PyUnusedLocal
+def scheme_4_rect_a_pos(u, a, I, x, J, t, lam, fun_f):
+    for j in range(J - 1):
+        for i in range(0 + 1, I):
+            fc = fun_f(x[i] + h / 2, t[j] + r / 2)
+            u[i][j + 1] = \
+                (u[i - 1][j] * (1 + lam) + (u[i][j] - u[i - 1][j + 1]) * (1 - lam) + 2 * r * fc) \
+                / (1 + lam)
+
+
+# Схема 4 для прямоугольной области. a < 0
+# noinspection PyUnusedLocal
+def scheme_4_rect_a_neg(u, a, I, x, J, t, lam, fun_f):
+    for j in range(J - 1):
+        for i in range(I - 1, 0, -1):  # здесь идём по координатам в обратном порядке (от правой границе к левой)
+            fc = fun_f(x[i] + h / 2, t[j] + r / 2)
+            u[i - 1][j + 1] = \
+                (
+                        2 * r * h * fc
+                        + h * (u[i - 1][j] + u[i][j] - u[i][j + 1])
+                        - a * r * (u[i][j] + u[i][j + 1] - u[i - 1][j])
+                ) \
+                / (h - a * r)
 
 
 ###################################################################################################
 
 
 def scheme_1_case_1():
-    r = 0.04
     J = int((def_t_end - def_t_start) / r) + 1
     x_start = def_x_start - J * h
     I = int((def_x_end - x_start) / h) + 1
@@ -98,16 +150,15 @@ def scheme_1_case_1():
         t_start=def_t_start,
         t_end=def_t_end,
         a=a_pos,
-        r=r,
-        fun_f=lambda _x, _t: 0,
-        fun_u_x_0=lambda _x: _x ** 2 + 2 * _x,
+        fun_f=lambda x, t: 0,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
         fun_u_0_x=None,
-        scheme=scheme_1_halfplane,
+        fun_u_1_x=None,
+        scheme=scheme_1_halfplane_a_pos,
     )
 
 
 def scheme_1_case_2():
-    r = 0.04
     J = int((def_t_end - def_t_start) / r) + 1
     x_start = def_x_start - J * h
     I = int((def_x_end - x_start) / h) + 1
@@ -120,55 +171,262 @@ def scheme_1_case_2():
         t_start=def_t_start,
         t_end=def_t_end,
         a=a_pos,
-        r=r,
-        fun_f=lambda _x, _t: _x,
-        fun_u_x_0=lambda _x: _x ** 2 + 2 * _x,
+        fun_f=lambda x, t: x,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
         fun_u_0_x=None,
-        scheme=scheme_1_halfplane,
+        fun_u_1_x=None,
+        scheme=scheme_1_halfplane_a_pos,
     )
 
 
 def scheme_1_case_3():
-    r = 0.04
     J = int((def_t_end - def_t_start) / r) + 1
-    x_start = def_x_start
-    I = int((def_x_end - x_start) / h) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
     solve(
         title="Схема 1. 3 случай: прямоугольная область, a > 0, однородное",
         I=I,
-        x_start=x_start,
+        x_start=def_x_start,
         x_end=def_x_end,
         J=J,
         t_start=def_t_start,
         t_end=def_t_end,
         a=a_pos,
-        r=r,
-        fun_f=lambda _x, _t: 0,
-        fun_u_x_0=lambda _x: _x ** 2 + 2 * _x,
-        fun_u_0_x=lambda _t: _t ** 2 + 2 * _t,
-        scheme=scheme_1_rect,
+        fun_f=lambda x, t: 0,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=lambda t: t ** 2 + 2 * t,
+        fun_u_1_x=None,
+        scheme=scheme_1_rect_a_pos,
     )
 
 
 def scheme_1_case_4():
-    r = 0.04
     J = int((def_t_end - def_t_start) / r) + 1
-    x_start = def_x_start
-    I = int((def_x_end - x_start) / h) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
     solve(
         title="Схема 1. 4 случай: прямоугольная область, a > 0, неоднородное",
         I=I,
-        x_start=x_start,
+        x_start=def_x_start,
         x_end=def_x_end,
         J=J,
         t_start=def_t_start,
         t_end=def_t_end,
         a=a_pos,
-        r=r,
-        fun_f=lambda _x, _t: _x,
-        fun_u_x_0=lambda _x: _x ** 2 + 2 * _x,
-        fun_u_0_x=lambda _t: _t ** 2 + 2 * _t,
-        scheme=scheme_1_rect,
+        fun_f=lambda x, t: x,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=lambda t: t ** 2 + 2 * t,
+        fun_u_1_x=None,
+        scheme=scheme_1_rect_a_pos,
+    )
+
+
+###################################################################################################
+
+
+def scheme_2_case_1():
+    J = int((def_t_end - def_t_start) / r) + 1
+    x_end = def_x_end + J * h
+    I = int((x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 2. 1 случай: полуплоскость, a < 0, однородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_neg,
+        fun_f=lambda x, t: 0,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=None,
+        fun_u_1_x=None,
+        scheme=scheme_2_halfplane_a_neg,
+    )
+
+
+def scheme_2_case_2():
+    J = int((def_t_end - def_t_start) / r) + 1
+    x_end = def_x_end + J * h
+    I = int((x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 2. 2 случай: полуплоскость, a < 0, неоднородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_neg,
+        fun_f=lambda x, t: x,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=None,
+        fun_u_1_x=None,
+        scheme=scheme_2_halfplane_a_neg,
+    )
+
+
+def scheme_2_case_3():
+    J = int((def_t_end - def_t_start) / r) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 2. 3 случай: прямоугольная область, a < 0, однородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=def_x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_neg,
+        fun_f=lambda x, t: 0,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=None,
+        fun_u_1_x=lambda t: t ** 2 + 2 * t + 3,
+        scheme=scheme_2_rect_a_neg,
+    )
+
+
+def scheme_2_case_4():
+    J = int((def_t_end - def_t_start) / r) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 2. 4 случай: прямоугольная область, a < 0, неоднородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=def_x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_neg,
+        fun_f=lambda x, t: x,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=None,
+        fun_u_1_x=lambda t: t ** 2 + 2 * t + 3,
+        scheme=scheme_2_rect_a_neg,
+    )
+
+
+###################################################################################################
+
+
+def scheme_3_case_1():
+    J = int((def_t_end - def_t_start) / r) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 3. 1 случай: прямоугольная область, a > 0, однородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=def_x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_pos,
+        fun_f=lambda x, t: 0,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=lambda t: t ** 2 + 2 * t,
+        fun_u_1_x=None,
+        scheme=scheme_3_rect_a_pos,
+    )
+
+
+def scheme_3_case_2():
+    J = int((def_t_end - def_t_start) / r) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 3. 2 случай: прямоугольная область, a > 0, неоднородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=def_x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_pos,
+        fun_f=lambda x, t: x,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=lambda t: t ** 2 + 2 * t,
+        fun_u_1_x=None,
+        scheme=scheme_3_rect_a_pos,
+    )
+
+
+###################################################################################################
+
+
+def scheme_4_case_1():
+    J = int((def_t_end - def_t_start) / r) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 4. 1 случай: прямоугольная область, a > 0, однородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=def_x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_pos,
+        fun_f=lambda x, t: 0,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=lambda t: t ** 2 + 2 * t,
+        fun_u_1_x=None,
+        scheme=scheme_4_rect_a_pos,
+    )
+
+
+def scheme_4_case_2():
+    J = int((def_t_end - def_t_start) / r) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 4. 1 случай: прямоугольная область, a > 0, неоднородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=def_x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_pos,
+        fun_f=lambda x, t: x,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=lambda t: t ** 2 + 2 * t,
+        fun_u_1_x=None,
+        scheme=scheme_4_rect_a_pos,
+    )
+
+
+def scheme_4_case_3():
+    J = int((def_t_end - def_t_start) / r) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 4. 3 случай: прямоугольная область, a < 0, однородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=def_x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_neg,
+        fun_f=lambda x, t: 0,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=None,
+        fun_u_1_x=lambda t: t ** 2 + 2 * t + 3,
+        scheme=scheme_4_rect_a_neg,
+    )
+
+
+def scheme_4_case_4():
+    J = int((def_t_end - def_t_start) / r) + 1
+    I = int((def_x_end - def_x_start) / h) + 1
+    solve(
+        title="Схема 4. 4 случай: прямоугольная область, a < 0, неоднородное",
+        I=I,
+        x_start=def_x_start,
+        x_end=def_x_end,
+        J=J,
+        t_start=def_t_start,
+        t_end=def_t_end,
+        a=a_neg,
+        fun_f=lambda x, t: x,
+        fun_u_x_0=lambda x: x ** 2 + 2 * x,
+        fun_u_0_x=None,
+        fun_u_1_x=lambda t: t ** 2 + 2 * t + 3,
+        scheme=scheme_4_rect_a_neg,
     )
 
 
@@ -181,9 +439,11 @@ def_x_end = 1
 def_t_start = 0
 def_t_end = 10
 h = 0.1
+r = 0.04
+plots_color_theme = "plasma"
+
 a_pos = 2
 a_neg = -a_pos
-plots_color_theme = "plasma"
 
 
 def main():
@@ -194,8 +454,8 @@ def main():
     # Ещё в настройках PyCharm (Settings -> Tools -> Python Scientific) нужно отключить Show plots in tool window.
     matplotlib.use("TkAgg")
 
-    # Запуск решения одного выбранного случая.
-    scheme_1_case_4()
+    # Запуск решения одного выбранного случая. Выбрать одну из функций: scheme_1_case_1(), ...
+    scheme_4_case_4()
 
 
 if __name__ == "__main__":
