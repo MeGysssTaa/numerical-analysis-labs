@@ -22,11 +22,12 @@ def u_1_t(_t: float) -> float:
 
 
 def solve(
-    title: str,  # заголовок с описанием случая для вывода
-    I: int,
-    x_start: float,
-    x_end: float,
-    method: Callable  # схема решения -- одна из функций: method_1, method_2, method_3
+        title: str,  # заголовок с описанием случая для вывода
+        lam: float,
+        I: int,
+        x_start: float,
+        x_end: float,
+        method: Callable  # схема решения -- одна из функций: method_1, method_2, method_3
 ):
     # Подготовка (дано)
     x = np.linspace(x_start, x_end, I, dtype=float)
@@ -40,7 +41,7 @@ def solve(
         u[-1][j] = u_1_t(t[j])
 
     # Решение (применение схемы)
-    method(u, I, J)
+    method(u, I, J, lam)
 
     # Вывод ответа (таблица, график)
     i_plot_start = None
@@ -72,28 +73,81 @@ def solve(
 
 
 # Схема 1
-def method_1(u, I, J):
+def method_1(u, I, J, lam):
     for j in range(1, J - 1):
-        for i in range(j + 1, I - j - 1):
+        for i in range(1, I - 1):
             u[i][j + 1] = 2 * (1 - lam) * u[i][j] + lam * (u[i + 1][j] + u[i - 1][j]) - u[i][j - 1]
 
 
 # Схема 2
-# def method_2(u, I, J):
-#     for j in range(J - 1):
-#         for i in range(j + 1, I):
-#             u[i][j + 1] = r * (u[i - 1][j] ** 2 - u[i][j] ** 2) / (2 * h) + u[i][j]
+def method_2(u, I, J, lam):
+    ai = lam
+    bi = -(1 + 2 * lam)
+    ci = lam
+
+    for j in range(1, J - 1):
+        A: list[Optional[float]] = [None for _ in range(I)]
+        B: list[Optional[float]] = [None for _ in range(I)]
+        e: list[Optional[float]] = [None for _ in range(I)]
+        d: list[Optional[float]] = [None for _ in range(I)]
+
+        d[1] = (1 + 2 * lam) * u[1][j - 1] - lam * (u[1 + 1][j - 1] + u[1 - 1][j - 1]) - 2 * u[1][j] \
+               - lam * u[1 - 1][j + 1]
+        d[I - 2] = (1 + 2 * lam) * u[I - 2][j - 1] - lam * (u[I - 2 + 1][j - 1] + u[I - 2 - 1][j - 1]) - 2 * u[I - 2][j] \
+                   - lam * u[I - 2 + 1][j + 1]
+        A[1] = -ci / bi
+        B[1] = d[1] / bi
+
+        for i in range(2, I - 2):
+            d[i] = (1 + 2 * lam) * u[i][j - 1] - lam * (u[i + 1][j - 1] + u[i - 1][j - 1]) - 2 * u[i][j]
+            e[i] = ai * A[i - 1] + bi
+            A[i] = -ci / e[i]
+            B[i] = (d[i] - A[i] * B[i - 1]) / e[i]
+
+        u[I - 2][j + 1] = (d[I - 2] - ai * B[I - 3]) / (bi + ai * A[I - 3])
+        for i in range(I - 3, 0, -1):
+            u[i][j + 1] = A[i] * u[i + 1][j + 1] + B[i]
+
+
+# Схема 3
+def method_3(u, I, J, lam):
+    ai = lam
+    bi = -(1 + 2 * lam)
+    ci = lam
+
+    for j in range(1, J - 1):
+        A: list[Optional[float]] = [None for _ in range(I)]
+        B: list[Optional[float]] = [None for _ in range(I)]
+        e: list[Optional[float]] = [None for _ in range(I)]
+        d: list[Optional[float]] = [None for _ in range(I)]
+
+        d[1] = u[1][j - 1] - 2 * u[1][j] - lam * u[1 - 1][j + 1]
+        d[I - 2] = u[I - 2][j - 1] - 2 * u[I - 2][j] - lam * u[I - 1][j + 1]
+        A[1] = -ci / bi
+        B[1] = d[1] / bi
+
+        for i in range(2, I - 2):
+            d[i] = u[i][j - 1] - 2 * u[i][j]
+            e[i] = ai * A[i - 1] + bi
+            A[i] = -ci / e[i]
+            B[i] = (d[i] - A[i] * B[i - 1]) / e[i]
+
+        u[I - 2][j + 1] = (d[I - 2] - ai * B[I - 3]) / (bi + ai * A[I - 3])
+        for i in range(I - 3, 0, -1):
+            u[i][j + 1] = A[i] * u[i + 1][j + 1] + B[i]
 
 
 ###################################################################################################
 
 
 def solve_with_method_1():
-    x_start = a - J * h
-    x_end = b + J * h
+    x_start = a
+    x_end = b
     I = int((x_end - x_start) / h) + 1
+    lam = (r ** 2) / (h ** 2)  # лямбда
     solve(
         title="Схема 1",
+        lam=lam,
         I=I,
         x_start=x_start,
         x_end=x_end,
@@ -101,18 +155,34 @@ def solve_with_method_1():
     )
 
 
-# def solve_with_method_2():
-#     x_start = a - J * h
-#     x_end = b
-#     I = int((x_end - x_start) / h) + 1
-#     solve(
-#         title="Консервативная схема",
-#         I=I,
-#         x_start=x_start,
-#         x_end=x_end,
-#         method=method_2,
-#     )
+def solve_with_method_2():
+    x_start = a
+    x_end = b
+    I = int((x_end - x_start) / h) + 1
+    lam = (r ** 2) / (2 * (h ** 2))  # лямбда
+    solve(
+        title="Схема 2",
+        lam=lam,
+        I=I,
+        x_start=x_start,
+        x_end=x_end,
+        method=method_2,
+    )
 
+
+def solve_with_method_3():
+    x_start = a
+    x_end = b
+    I = int((x_end - x_start) / h) + 1
+    lam = (r ** 2) / (h ** 2)  # лямбда
+    solve(
+        title="Схема 3",
+        lam=lam,
+        I=I,
+        x_start=x_start,
+        x_end=x_end,
+        method=method_3,
+    )
 
 
 ###################################################################################################
@@ -126,8 +196,7 @@ d = 10  # def_t_end = t_end
 # a^2 (D^2) = 1
 # f(x,t) = 0
 h = 0.1  # шаг по x
-r = 0.05  # тау - шаг по t
-lam = (r ** 2) / (h ** 2)  # лямбда
+r = 0.01  # тау - шаг по t
 plots_color_theme = "plasma"
 
 J = int((d - c) / r) + 1
@@ -145,7 +214,7 @@ def main():
     print("...")
 
     # Решение выбранным способом: solve_with_method_1(), solve_with_method_2(), solve_with_method_3()
-    solve_with_method_1()
+    solve_with_method_3()
 
 
 if __name__ == '__main__':
