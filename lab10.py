@@ -39,7 +39,6 @@ def _solve(seidel: bool, grid_size: int, h: float, x, y, u):
 
 def solve(seidel: bool, grid_size: int, x, y) -> tuple[object, int]:
     h = (b - a) / (grid_size - 1)
-    print(h)
     u = np.zeros(shape=(grid_size, grid_size), dtype=float)
     u[0, :] = u_a_y(y)
     u[-1, :] = u_b_y(y)
